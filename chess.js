@@ -1,26 +1,24 @@
+// ======Global constants=====
+
 const pwn = " ♟";
-const peices = [" ♜", " ♞", " ♝", " ♛", " ♚", " ♝", " ♞", " ♜", " ♟"];
+const pieces = [" ♜", " ♞", " ♝", " ♛", " ♚", " ♝", " ♞", " ♜", " ♟"];
 
-function black(text) {
-  return "\x1B[1;38;5;0m" + text + "\x1B[0m";
-}
+//======UI helper ======
 
-function customBg(text, code) {
-  return "\x1B[48;5;" + code + "m" + text + "\x1B[0m";
-}
+const black = (text) => "\x1B[1;38;5;0m" + text + "\x1B[0m";
+const customBg = (text, code) => "\x1B[48;5;" + code + "m" + text + "\x1B[0m";
+const tileColor = (row, col) => (row + col) % 2 === 0 ? 221 : 22;
+
+//======Board Setup=====
 
 function choosePiece(row, col) {
   switch (row) {
-    case 0: return black(peices[col]);
+    case 0: return black(pieces[col]);
     case 1: return black(pwn);
     case 6: return pwn;
-    case 7: return peices[col];
+    case 7: return pieces[col];
     default: return "  ";
   }
-}
-
-function tileColor(row, col) {
-  return (row + col) % 2 === 0 ? 221 : 22;
 }
 
 function formBoard() {
@@ -35,133 +33,140 @@ function formBoard() {
   }
   return board;
 }
+let board = formBoard();
+
+//===== Render=====
 
 function renderBoard(board) {
   console.clear();
   console.log("\n\n\t\t    A B C D E F G H");
-  for (let i = 0; i < 8; i++) {
-    let row = "";
-    for (let j = 0; j < 8; j++) {
-      const piece = board[i][j];
-      const color = tileColor(i, j);
-      row += customBg(piece, color);
-    }
-    console.log("\t\t", 8 - i, row, 8 - i);
-  }
+  board.forEach((row, i) => {
+    const line = row.map((piece, j) => customBg(piece, tileColor(i, j))).join("");
+    console.log(`\t\t ${8 - i} ${line} ${8 - i}`);
+  });
   console.log("\t\t    A B C D E F G H");
 }
 
-function decodeMove(pos) {
+
+//===== utility =====
+
+const decodeMove = (pos) => {
   const chars = "ABCDEFGH";
   const y = chars.indexOf(pos[0].toUpperCase());
   const x = 8 - parseInt(pos[1]);
   return [x, y];
 }
 
-function isOnInitialPosition(from) {
-  return from[0] === 1 || from[0] === 6;
+const isEmpty = from => board[from[0]][from[1]] === "  ";
+const getPieceAt = (pos) => board[pos[0]][pos[1]];
+const setPieceTo = (pos, piece) => (board[pos[0]][pos[1]] = piece);
+
+//===== piece color function =====
+
+const isWhite = target => pieces.includes(target);
+const isBlack = target => !isWhite(target);
+
+const isOpponent = (piece, target) => (isBlack(piece) && isWhite(target))
+  || (isWhite(piece) && isBlack(target));
+
+const getPieceType = (target) => {
+  if (target.includes(" ♟")) return "pawn";
+  if (target.includes(" ♜")) return "rook";
+  return;
+};
+
+//===== pieces rules functions ======
+
+//===Pawn Rules functions ====
+
+const isInitialPosition = from => from[0] === 1 || from[0] === 6;
+const isValidTile = (to, from) => isEmpty(to) && !isEmpty(from);
+const isDiagonalMove = (yDiff, xDiff) => yDiff === 1 && xDiff === 1;
+
+const isValidDiagonalMove = (piece, to) => {
+  const target = getPieceAt(to);
+  return !isEmpty(target) && isOpponent(piece, target);
 }
 
-function isEmpty(from) {
-  return board[from[0]][from[1]] === "  ";
+const isInitialMove = (yDiff, xDiff, from) => yDiff === 2 && xDiff === 0
+  && isInitialPosition(from);
+
+const isSingleStepMove = (yDiff, xDiff, to, from) => yDiff === 1 && xDiff === 0
+  && isValidTile(to, from);
+
+const isKillingMove = (yDiff, xDiff, piece, to) =>
+  isDiagonalMove(yDiff, xDiff) && isValidDiagonalMove(piece, to);
+
+//=====Rook Rules functions ====
+
+const isLinearPath = (from, to) => from[0] === to[0] || from[1] === to[1];
+const isVerticalMove = (from, to) => from[1] === to[1];
+const getStep = (from, to, axis) => (from[axis] < to[axis] ? 1 : -1);
+
+const tracePath = (start, end, cord, direction, step) => {
+  const cells = [];
+  for (let pos = start + step; pos !== end; pos += step) {
+    direction === 1 ? cells.push([pos, cord]) : cells.push([cord, pos]);
+  }
+  return cells;
 }
 
-function isValidTile(to, from) {
-  return isEmpty(to) && !isEmpty(from);
-}
+const isVerticalPathClear = (from, to) => {
+  const step = getStep(from, to, 0);
+  const frontCells = tracePath(from[0], to[0], to[1], 1, step);
+  return frontCells.every(isEmpty);
+};
 
-function isDiagonalMove(yDiff, xDiff) {
-  return yDiff === 1 && xDiff === 1;
-}
+const isHorizontalPathClear = (from, to) => {
+  const step = getStep(from, to, 1);
+  const sideCells = tracePath(from[1], to[1], to[0], 0, step);
+  return sideCells.every(isEmpty);
+};
 
-function isWhite(target) {
-  return peices.includes(target);
-}
-
-function isBlack(target) {
-  return !isWhite(target);
-}
+const isPathClear = (from, to) => {
+  return isVerticalMove(from, to)
+  ? isVerticalPathClear(from, to)
+  : isHorizontalPathClear(from, to);
+};
 
 
-function isOpponent(peice, target) {
-  return isBlack(peice) && isWhite(target) || isWhite(peice) && isBlack(target);
-}
+// ===== pieces rules =====
 
-function isValidDiagonalMove(peice, to) {
-  const target = board[to[0]][to[1]];
-
-  return target !== "  " && isOpponent(peice, target)
-}
-
-function isInitialMove(yDiff, xDiff, from) {
-  return yDiff === 2 && xDiff === 0 && isOnInitialPosition(from);
-}
-
-function isSingleStepMove(yDiff, xDiff, to, from) {
-  return yDiff === 1 && xDiff === 0 && isValidTile(to, from);
-}
-
-function isKillingMove(yDiff, xDiff, peice, to) {
-  return isDiagonalMove(yDiff, xDiff) && isValidDiagonalMove(peice, to);
-}
-
-function pawnRules(from, to, peice) {
-  const direction = isWhite(peice) ? 1 : -1
+function pawnRules(from, to, piece) {
+  const direction = isWhite(piece) ? 1 : -1;
   const xDiff = Math.abs(from[1] - to[1]);
   const yDiff = (from[0] - to[0]) * direction;
 
-  let isValid = isInitialMove(yDiff, xDiff, from) || isSingleStepMove(yDiff, xDiff, to, from);
-
-  return isValid || isKillingMove(yDiff, xDiff, peice, to);
-
+  return isInitialMove(yDiff, xDiff, from)
+    || isSingleStepMove(yDiff, xDiff, to, from)
+    || isKillingMove(yDiff, xDiff, piece, to);
 }
 
-function islinearPath(from, to) {
-  return from[0] === to[0] || from[1] === to[1]
+function rookRules(from, to, piece) {
+  const target = getPieceAt(to);
+  return (
+    isLinearPath(from, to) &&
+    isPathClear(from, to) &&
+    (isEmpty(to) || isOpponent(piece, target))
+  );
 }
 
-function isPathClear(from, to) {
-  const [x1, y1] = from;
-  const [x2, y2] = to;
-
-  if (x1 === x2) {
-    const step = y2 > y1 ? 1 : -1;
-    for (let y = y1 + step; y !== y2; y += step) {
-      if (board[x1][y] !== "  ") return false;
-    }
-    return true;
-  }
-
-
-  const step = x2 > x1 ? 1 : -1;
-  for (let x = x1 + step; x !== x2; x += step) {
-    if (board[x][y1] !== "  ") {
-      return false;
-    }
-  }
-
-
-  return true;
-}
-
-
-function rookRules(from, to, peice) {
-  return islinearPath(from, to) && isPathClear(from, to) && (isEmpty(to) || isOpponent(peice, target));
-}
-
+//===== Getting And Validating Moves=====
 
 function isValidMove(move, player) {
-
-  console.log(move, "inside is Valid");
   const from = move[0];
   const to = move[1];
-  const target = board[from[0]][from[1]];
-  console.log(target, from, to);
+  const piece = getPieceAt(from);
+  const type = getPieceType(piece);
 
-
-  if (target.includes(" ♟")) { return pawnRules(from, to, target); }
-  if (target.includes(" ♜")) { return rookRules(from, to, target) }
-
+  switch (type) {
+    case "pawn":
+      return pawnRules(from, to, piece);
+    case "rook":
+      return rookRules(from, to, piece);
+    default:
+      return false;
+  }
 }
 
 function getUserMove(player) {
@@ -171,33 +176,38 @@ function getUserMove(player) {
     if (isValidMove([from, to], player)) {
       return [from, to];
     }
-    console.log("\n\n\t\t Enter A valid Move\n\n\t");
-
+    renderBoard(board);
+    console.log("\n\n\t\t Enter a valid move\n\n\t");
   }
 }
+
+//=====Move & Play=====
+
 
 function moveUser(move) {
   const from = move[0];
   const to = move[1];
-
-  const piece = board[from[0]][from[1]];
-  board[to[0]][to[1]] = piece;
-  board[from[0]][from[1]] = "  ";
+  const piece = getPieceAt(from);
+  setPieceTo(to, piece);
+  setPieceTo(from, "  ");
 }
 
 function changePlayer(player) {
   return player === 1 ? 2 : 1;
 }
 
+const playTurn = (player) => {
+  renderBoard(board);
+  const move = getUserMove();
+  moveUser(move);
+  return changePlayer(player);
+};
+
 function play() {
   let player = 1;
   while (true) {
-    renderBoard(board);
-    const move = getUserMove();
-    moveUser(move);
-    player = changePlayer(player);
+    player = playTurn(player);
   }
 }
 
-let board = formBoard();
 play();
