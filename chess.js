@@ -1,6 +1,7 @@
 // ======Global constants=====
 
-const pwn = " ♟";
+const pawn = " ♟";
+const EMPTY = "  "
 const pieces = [" ♜", " ♞", " ♝", " ♛", " ♚", " ♝", " ♞", " ♜", " ♟"];
 
 //======UI helper ======
@@ -14,10 +15,10 @@ const tileColor = (row, col) => (row + col) % 2 === 0 ? 221 : 22;
 function choosePiece(row, col) {
   switch (row) {
     case 0: return black(pieces[col]);
-    case 1: return black(pwn);
-    case 6: return pwn;
+    case 1: return black(pawn);
+    case 6: return pawn;
     case 7: return pieces[col];
-    default: return "  ";
+    default: return EMPTY;
   }
 }
 
@@ -40,10 +41,15 @@ let board = formBoard();
 function renderBoard(board) {
   console.clear();
   console.log("\n\n\t\t    A B C D E F G H");
-  board.forEach((row, i) => {
-    const line = row.map((piece, j) => customBg(piece, tileColor(i, j))).join("");
-    console.log(`\t\t ${8 - i} ${line} ${8 - i}`);
+
+  board.forEach((row, yAxis) => {
+    const line = row.map(
+      (piece, xAxis) => customBg(piece, tileColor(yAxis, xAxis))
+    ).join("");
+
+    console.log(`\t\t ${8 - yAxis} ${line} ${8 - yAxis}`);
   });
+
   console.log("\t\t    A B C D E F G H");
 }
 
@@ -57,125 +63,154 @@ const decodeMove = (pos) => {
   return [x, y];
 }
 
-const isEmpty = from => board[from[0]][from[1]] === "  ";
 const getPieceAt = (pos) => board[pos[0]][pos[1]];
+
 const setPieceTo = (pos, piece) => (board[pos[0]][pos[1]] = piece);
 
-//===== piece color function =====
+const isEmpty = from => getPieceAt(from) === EMPTY;
 
 const isWhite = target => pieces.includes(target);
+
 const isBlack = target => !isWhite(target);
+
+//===== Common  function for rules =====
+
+const isDiagonalMove = (from, to) => {
+  return from[0] - to[0] !== 0 && from[1] - to[1] !== 0;
+};
 
 const isOpponent = (piece, target) => (isBlack(piece) && isWhite(target))
   || (isWhite(piece) && isBlack(target));
 
-const getPieceType = (target) => {
-  if (target.includes(" ♟")) return "pawn";
-  if (target.includes(" ♜")) return "rook";
-  return;
-};
-
-//===== pieces rules functions ======
-
-//===Pawn Rules functions ====
-
-const isInitialPosition = from => from[0] === 1 || from[0] === 6;
-const isValidTile = (to, from) => isEmpty(to) && !isEmpty(from);
-const isDiagonalMove = (yDiff, xDiff) => yDiff === 1 && xDiff === 1;
-
-const isValidDiagonalMove = (piece, to) => {
-  const target = getPieceAt(to);
-  return !isEmpty(target) && isOpponent(piece, target);
+const canLandOn = (from, to) => {
+  const piece = getPieceAt(from);
+  const target = getPieceAt(to)
+  return isEmpty(to) || isOpponent(piece, target);
 }
 
-const isInitialMove = (yDiff, xDiff, from) => yDiff === 2 && xDiff === 0
-  && isInitialPosition(from);
+const getStep = (pos1, pos2) => (pos1 < pos2 ? 1 : -1);
 
-const isSingleStepMove = (yDiff, xDiff, to, from) => yDiff === 1 && xDiff === 0
-  && isValidTile(to, from);
-
-const isKillingMove = (yDiff, xDiff, piece, to) =>
-  isDiagonalMove(yDiff, xDiff) && isValidDiagonalMove(piece, to);
-
-//=====Rook Rules functions ====
-
-const isLinearPath = (from, to) => from[0] === to[0] || from[1] === to[1];
-const isVerticalMove = (from, to) => from[1] === to[1];
-const getStep = (from, to, axis) => (from[axis] < to[axis] ? 1 : -1);
-
-const tracePath = (start, end, cord, direction, step) => {
+const tracePath = (from,to) => {
   const cells = [];
-  for (let pos = start + step; pos !== end; pos += step) {
-    direction === 1 ? cells.push([pos, cord]) : cells.push([cord, pos]);
+  const [fy, fx] = from;
+  const [tx, ty] = to;
+  const yStep = getStep(fy,ty)
+  const xStep = getStep(fx,tx)
+
+
+  while (fx !== tx || fy !== ty ){
+    
+    fx += fx === tx ? 0 : xStep;
+    fy += fy === ty ? 0 : yStep;
+    cells.push([fy,fx]);
   }
   return cells;
 }
 
-const isVerticalPathClear = (from, to) => {
-  const step = getStep(from, to, 0);
-  const frontCells = tracePath(from[0], to[0], to[1], 1, step);
-  return frontCells.every(isEmpty);
-};
-
-const isHorizontalPathClear = (from, to) => {
-  const step = getStep(from, to, 1);
-  const sideCells = tracePath(from[1], to[1], to[0], 0, step);
-  return sideCells.every(isEmpty);
-};
-
 const isPathClear = (from, to) => {
-  return isVerticalMove(from, to)
-  ? isVerticalPathClear(from, to)
-  : isHorizontalPathClear(from, to);
+  const pathCells = tracePath(from,to);
+  return pathCells.every(isEmpty)
 };
 
+//=== functions for Pawn Rules  ====
 
-// ===== pieces rules =====
+const wasInitialPosition = from => from[0] === 1 || from[0] === 6;
 
-function pawnRules(from, to, piece) {
+const isValidDiagonalMove = (piece, to) => {
+  const target = getPieceAt(to);
+  return !isEmpty(to) && isOpponent(piece, target);
+}
+
+const isInitialMove = (yDiff, xDiff, from, to) => wasInitialPosition(from)
+  && yDiff === 2 && xDiff === 0 && isEmpty(to);
+
+const isSingleStepMove = (yDiff, xDiff, to) => yDiff === 1 && xDiff === 0
+  && isEmpty(to);
+
+const isKillingMove = (piece, to, from) =>
+  isDiagonalMove(from, to) && isValidDiagonalMove(piece, to);
+
+//===== functions for  Rook Rules  =====
+
+const isLinearPath = (from, to) => from[0] === to[0] || from[1] === to[1];
+
+
+//===== functions for bishop Rules =====
+
+
+//===== functions for knight Rules =====
+
+//===== functions for Queen Rules =====
+
+
+//===== Pawn Rules =====
+
+function pawnRules(from, to) {
+  const piece = getPieceAt(from);
   const direction = isWhite(piece) ? 1 : -1;
   const xDiff = Math.abs(from[1] - to[1]);
   const yDiff = (from[0] - to[0]) * direction;
 
-  return isInitialMove(yDiff, xDiff, from)
-    || isSingleStepMove(yDiff, xDiff, to, from)
-    || isKillingMove(yDiff, xDiff, piece, to);
+  return (isInitialMove(yDiff, xDiff, from, to)
+    || isSingleStepMove(yDiff, xDiff, to)
+    || isKillingMove(piece, to, from));
 }
 
-function rookRules(from, to, piece) {
-  const target = getPieceAt(to);
+//===== Rook Rules =====
+
+function rookRules(from, to) {
   return (
     isLinearPath(from, to) &&
     isPathClear(from, to) &&
-    (isEmpty(to) || isOpponent(piece, target))
+    canLandOn(from, to)
   );
 }
 
+//===== Bishop Rules =====
+
+const bishopRules = (from, to) => {
+  return isDiagonalMove(from, to) && isPathClear(from, to) && canLandOn(from, to);
+}
+
+//===== Knight Rules =====
+
+const knightRules = (from, to) =>   canLandOn(from, to);
+
+//===== Queen Rules =====
+
+const queenRules = (from, to) => bishopRules(from, to) || rookRules(from, to);
+
 //===== Getting And Validating Moves=====
+
+const getPieceType = (target) => {
+  if (target.includes(" ♟")) return pawnRules;
+  if (target.includes(" ♜")) return rookRules;
+  if (target.includes(" ♝")) return bishopRules;
+  if (target.includes(" ♞")) return knightRules;
+  if (target.includes(" ♛")) return queenRules;
+  return;
+};
+
+const isPlayersTurn = (piece, player) => isWhite(piece) ? "white" : "black" === player;
 
 function isValidMove(move, player) {
   const from = move[0];
   const to = move[1];
-  const piece = getPieceAt(from);
-  const type = getPieceType(piece);
+  const piece = getPieceAt(from)
+  const rules = getPieceType(piece);
 
-  switch (type) {
-    case "pawn":
-      return pawnRules(from, to, piece);
-    case "rook":
-      return rookRules(from, to, piece);
-    default:
-      return false;
-  }
+  return isPlayersTurn(piece, player) ? rules(from, to) : false;
 }
 
 function getUserMove(player) {
   while (true) {
     const from = decodeMove(prompt("From : ").toUpperCase());
     const to = decodeMove(prompt("To : ").toUpperCase());
+
     if (isValidMove([from, to], player)) {
       return [from, to];
     }
+
     renderBoard(board);
     console.log("\n\n\t\t Enter a valid move\n\n\t");
   }
@@ -193,7 +228,7 @@ function moveUser(move) {
 }
 
 function changePlayer(player) {
-  return player === 1 ? 2 : 1;
+  return player === "white" ? "black" : "white";
 }
 
 const playTurn = (player) => {
@@ -204,7 +239,7 @@ const playTurn = (player) => {
 };
 
 function play() {
-  let player = 1;
+  let player = "white";
   while (true) {
     player = playTurn(player);
   }
