@@ -58,6 +58,7 @@ function getUserMove(moveCount, mazeArray) {
   printMaze(mazeArray);
   console.log("\tNumber of moves played : ", moveCount);
   console.log("\n\t W = 👆\tS = 👇\t A = 👈\t D = 👉\n");
+  console.log("\n\t > quit <  to quit the game\n");
   return prompt("\tenter where to move : ");
 }
 
@@ -68,6 +69,9 @@ function startGame(mazeArray) {
   let moveCount = 0;
   while (true) {
     const userMovement = getUserMove(moveCount, mazeArray);
+    if (userMovement === "quit"){
+      console.log("Game Quitted .....");
+       return}
     currentPos = moveUser(userMovement, currentPos, mazeArray, moveCount);
     moveCount++
     if (currentPos === "WIN") {
@@ -77,7 +81,7 @@ function startGame(mazeArray) {
 }
 
 
-function main() {
+export function main() {
   let mazeArrays = [[
     [WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL],
     [WL, ES, ES, ES, ES, ES, ES, WL, ES, ES, ES, ES, ES, ES, ES, ES, ES, WL],
@@ -138,8 +142,4 @@ function main() {
   [WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL, WL]]
   ];
   startGame(mazeArrays[Math.floor(Math.random() * 3)]);
-  const playAgain = confirm("do you want to play again :")
-  if (playAgain) { return startGame; }
 }
-
-main();
