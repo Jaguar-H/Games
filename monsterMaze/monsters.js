@@ -21,10 +21,11 @@ export const validMoves = ({x, y}) => {
     [y + 1, x],
     [y - 1, x],
   ];
-  
+  const wall = 1;
   const availablePath = [];
+
   for (const [y, x] of blocksToCheck) {
-    if (maze[y][x] !== 1) availablePath.push([y, x]);
+    if (maze[y][x] !== wall) availablePath.push([y, x]);
   }
   return availablePath;
 };
@@ -34,12 +35,13 @@ export const updateEntity = (entity,[y,x]) => {
   entity.y = y;
 };
 
-export const updateMonsters = (monsters) => monsters.forEach(monster => {
+export const updateMonsters = (monsters) =>
+  monsters.forEach(monster => {
   const move = chooseMove(validMoves(monster))
   if (move.length === 0) return
   updateEntity(monster,move)
 });
 
-export const chooseMove = (moves) =>moves[Math.floor(Math.random() * moves.length)]
+export const chooseMove = (moves) => moves[Math.floor(Math.random() * moves.length)]
 
 

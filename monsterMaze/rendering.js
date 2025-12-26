@@ -2,15 +2,16 @@ import { maze } from "./maze.js";
 
 const renderGrid = (grid) => {
   grid.forEach(row => {
-    console.log(row.join(""));
+    console.log("\t\t",row.join(""));
   });
 };
 
 export const render = (player, monsters) => {
-  const tiles = { 1: "🟫", 0: "  ", 2: "🧀" };
-  const entityView = { player: "👨🏻‍🦰", monster: "👹" };
+  const tiles = { 1: "🟫", 0: "  ", 2: "👸🏼" };
 
-  const grid = maze.map((row) => row.map((t) => tiles[t]));
+  const entityView = { player: "🫅🏻", monster: "👹" };
+
+  const grid = maze.map((row) => row.map((tile) => tiles[tile]));
   
   grid[player.y][player.x] = entityView[player.type];
 
